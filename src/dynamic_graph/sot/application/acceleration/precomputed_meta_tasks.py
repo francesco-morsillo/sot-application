@@ -24,8 +24,8 @@ from dynamic_graph.sot.dyninv.meta_tasks_dyn import gotoNd, MetaTaskDynCom, \
 from dynamic_graph.sot.dyninv.meta_task_dyn_6d import MetaTaskDyn6d
 from dynamic_graph import plug
 
-from numpy import eye
-from dynamic_graph.sot.core.matrix_util import matrixToTuple
+from numpy import eye, array
+from dynamic_graph.sot.core.matrix_util import matrixToTuple, vectorToTuple
 
 class Solver:
 
@@ -113,7 +113,11 @@ def setTaskLim(taskLim,robot):
     taskLim.dt.value = robot.timeStep
     robot.dynamic.upperJl.recompute(0)
     robot.dynamic.lowerJl.recompute(0)
-    taskLim.referencePosInf.value = robot.dynamic.lowerJl.value
+    refInf = array(robot.dynamic.lowerJl.value)
+    # Avoid knee singularity
+    refInf[9] = 0.7
+    refInf[15] = 0.7
+    taskLim.referencePosInf.value = vectorToTuple(refInf)
     taskLim.referencePosSup.value = robot.dynamic.upperJl.value
     #dqup = (0, 0, 0, 0, 0, 0, 200, 220, 250, 230, 290, 520, 200, 220, 250, 230, 290, 520, 250, 140, 390, 390, 240, 140, 240, 130, 270, 180, 330, 240, 140, 240, 130, 270, 180, 330)
     dqup = (1000,)*robot.dimension     ########################
@@ -183,21 +187,6 @@ def createTasks(robot):
     robot.mTasks['posture'] = MetaTaskDynPosture(robot.dynamic,robot.timeStep)
     robot.mTasks['posture'].ref = robot.halfSitting
     robot.mTasks['posture'].gain.setConstant(5)   
-
-    
-    ## TASK INEQUALITY
-
-    # Task Height
-    featureHeight = FeatureGeneric('featureHeight')
-    plug(robot.dynamic.com,featureHeight.errorIN)
-    plug(robot.dynamic.Jcom,featureHeight.jacobianIN)
-    robot.tasksIne['taskHeight']=TaskDynInequality('taskHeight')
-    plug(robot.dynamic.velocity,robot.tasksIne['taskHeight'].qdot)
-    robot.tasksIne['taskHeight'].add(featureHeight.name)
-    robot.tasksIne['taskHeight'].selec.value = '100'
-    robot.tasksIne['taskHeight'].referenceInf.value = (0.,0.,0.)    # Xmin, Ymin
-    robot.tasksIne['taskHeight'].referenceSup.value = (0.,0.,0.80771)  # Xmax, Ymax
-    robot.tasksIne['taskHeight'].dt.value=robot.timeStep
 
 
 def createBalanceAndPosture(robot,solver):

@@ -21,12 +21,13 @@ from dynamic_graph.sot.core.meta_tasks import setGain
 from dynamic_graph.sot.core.meta_tasks_kine import MetaTaskKine6d, MetaTaskKineCom
 from dynamic_graph.sot.core.meta_task_6d import toFlags
 from dynamic_graph.sot.core.meta_task_posture import MetaTaskKinePosture
+from dynamic_graph.sot.core.matrix_util import vectorToTuple
 
 from dynamic_graph.sot.dyninv import SolverKine
 from dynamic_graph.sot.dyninv import TaskJointLimits, TaskInequality
 from dynamic_graph import plug
 
-from numpy import eye
+from numpy import eye, array
 from dynamic_graph.sot.core.matrix_util import matrixToTuple
 
 class Solver:
@@ -100,7 +101,11 @@ def setTaskLim(taskJL,robot):
     robot.dynamic.lowerJl.recompute(0)
     plug(robot.dynamic.position,taskJL.position)
     taskJL.controlGain.value = 10
-    taskJL.referenceInf.value = robot.dynamic.lowerJl.value
+    refInf = array(robot.dynamic.lowerJl.value)
+    # Avoid knee singularity
+    refInf[9] = 0.7
+    refInf[15] = 0.7
+    taskJL.referenceInf.value = vectorToTuple(refInf)
     taskJL.referenceSup.value = robot.dynamic.upperJl.value
     taskJL.dt.value = robot.timeStep
     taskJL.selec.value = toFlags(range(6,22)+range(22,28)+range(29,35))
@@ -110,7 +115,6 @@ def createTasks(robot):
     
     # MetaTasks dictonary
     robot.mTasks = dict()
-    robot.tasksIne = dict()
 
     # Foot contacts
     robot.contactLF = MetaTaskKine6d('contactLF',robot.dynamic,'LF','left-ankle')
@@ -147,23 +151,8 @@ def createTasks(robot):
     robot.mTasks['posture'].ref = robot.halfSitting
     robot.mTasks['posture'].gain.setConstant(5)   
     
-    ## TASK INEQUALITY
-
-    
-    # Task Height
-    featureHeight = FeatureGeneric('featureHeight')
-    plug(robot.dynamic.com,featureHeight.errorIN)
-    plug(robot.dynamic.Jcom,featureHeight.jacobianIN)
-    robot.tasksIne['taskHeight']=TaskInequality('taskHeight')
-    robot.tasksIne['taskHeight'].add(featureHeight.name)
-    robot.tasksIne['taskHeight'].selec.value = '100'
-    robot.tasksIne['taskHeight'].referenceInf.value = (0.,0.,0.)    # Xmin, Ymin
-    robot.tasksIne['taskHeight'].referenceSup.value = (0.,0.,0.80771)  # Xmax, Ymax
-    robot.tasksIne['taskHeight'].dt.value=robot.timeStep
-
 
 def createBalance(robot,solver):
-
     solver.clear()
     
     # Task Limits
