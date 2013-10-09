@@ -16,16 +16,17 @@
 #!/usr/bin/env python
 
 from dynamic_graph.sot.core.feature_position import FeaturePosition
-from dynamic_graph.sot.core import FeatureGeneric, FeatureJointLimits, Task, \
-    JointLimitator
+from dynamic_graph.sot.core import FeatureGeneric, FeatureJointLimits, Task, JointLimitator
+from dynamic_graph.sot.core.meta_task_6d import toFlags
+from dynamic_graph.sot.core.matrix_util import matrixToTuple, vectorToTuple, rotate
+
 from dynamic_graph.sot.dyninv import SolverKine, TaskDynLimits, TaskDynInequality
-from dynamic_graph.sot.dyninv.meta_tasks_dyn import gotoNd, MetaTaskDynCom, \
-    MetaTaskDynPosture
+from dynamic_graph.sot.dyninv.meta_tasks_dyn import gotoNd, MetaTaskDynCom,  MetaTaskDynPosture
+from dynamic_graph.sot.dyninv.meta_task_dyn_visual_point import MetaTaskDynVisualPoint
 from dynamic_graph.sot.dyninv.meta_task_dyn_6d import MetaTaskDyn6d
 from dynamic_graph import plug
 
-from numpy import eye, array
-from dynamic_graph.sot.core.matrix_util import matrixToTuple, vectorToTuple
+from numpy import eye, array, dot, pi
 
 class Solver:
 
@@ -50,18 +51,6 @@ class Solver:
         self.sot.setSecondOrderKinematics()
         plug(self.robot.device.velocity,self.robot.dynamic.velocity)
 	plug(self.robot.dynamic.velocity,self.sot.velocity)
-
-        """
-        # Plug the solver control into the filter.
-        plug(self.sot.control, self.jointLimitator.controlIN)
-
-        # Important: always use 'jointLimitator.control'
-        # and NOT 'sot.control'!
-
-        if robot.device:
-            plug(self.jointLimitator.control, robot.device.control)
-        
-        """
 
         # Plug the solver control into the robot.
         plug(self.sot.control, robot.device.control)
@@ -125,7 +114,6 @@ def setTaskLim(taskLim,robot):
     taskLim.referenceVelSup.value = tuple([ val*3.14/180 for val in dqup])
     taskLim.controlGain.value = 0.3
 
-
 def setContacts(contactLF,contactRF):
     """
     Sets the parameters for teh contacts
@@ -174,6 +162,14 @@ def createTasks(robot):
     handMgrip=eye(4); handMgrip[0:3,3] = (0,0,-0.14)
     robot.mTasks['rh'].opmodif = matrixToTuple(handMgrip)
     robot.mTasks['lh'].opmodif = matrixToTuple(handMgrip)
+
+    robot.mTasks['gaze'] = MetaTaskDynVisualPoint('gaze',robot.dynamic,'head','gaze')
+    headMcam = array([[0.0,0.0,1.0,0.081],[1.,0.0,0.0,0.072],[0.0,1.,0.0,0.031],[0.0,0.0,0.0,1.0]])
+    headMcam = dot(headMcam,rotate('x',10*pi/180))
+    robot.mTasks['gaze'].opmodif = matrixToTuple(headMcam)
+    robot.mTasks['gaze'].featureDes.xy.value = (0,0)
+    robot.mTasks['gaze'].task.dt.value = robot.timeStep
+    robot.mTasks['gaze'].gain.setConstant(1)
  
 
     # CoM Task

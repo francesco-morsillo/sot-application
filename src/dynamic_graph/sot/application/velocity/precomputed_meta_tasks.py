@@ -17,18 +17,17 @@
 
 from dynamic_graph.sot.core.feature_position import FeaturePosition
 from dynamic_graph.sot.core import FeatureGeneric, FeatureJointLimits, Task, JointLimitator
-from dynamic_graph.sot.core.meta_tasks import setGain
 from dynamic_graph.sot.core.meta_tasks_kine import MetaTaskKine6d, MetaTaskKineCom
 from dynamic_graph.sot.core.meta_task_6d import toFlags
 from dynamic_graph.sot.core.meta_task_posture import MetaTaskKinePosture
-from dynamic_graph.sot.core.matrix_util import vectorToTuple
+from dynamic_graph.sot.core.matrix_util import vectorToTuple, rotate, matrixToTuple
+from dynamic_graph.sot.core.meta_task_visual_point import MetaTaskVisualPoint
 
 from dynamic_graph.sot.dyninv import SolverKine
 from dynamic_graph.sot.dyninv import TaskJointLimits, TaskInequality
 from dynamic_graph import plug
 
-from numpy import eye, array
-from dynamic_graph.sot.core.matrix_util import matrixToTuple
+from numpy import eye, array, dot, pi
 
 class Solver:
 
@@ -132,12 +131,19 @@ def createTasks(robot):
     
     for taskName in robot.mTasks:
         robot.mTasks[taskName].feature.frame('desired')
-        robot.mTasks[taskName].gain.setConstant(10)
+        robot.mTasks[taskName].gain.setConstant(1)
    
     handMgrip=eye(4); handMgrip[0:3,3] = (0,0,-0.14)
     robot.mTasks['rh'].opmodif = matrixToTuple(handMgrip)
     robot.mTasks['lh'].opmodif = matrixToTuple(handMgrip)
  
+    robot.mTasks['gaze'] = MetaTaskVisualPoint('gaze',robot.dynamic,'head','gaze')
+    headMcam = array([[0.0,0.0,1.0,0.081],[1.,0.0,0.0,0.072],[0.0,1.,0.0,0.031],[0.0,0.0,0.0,1.0]])
+    headMcam = dot(headMcam,rotate('x',10*pi/180))
+    robot.mTasks['gaze'].opmodif = matrixToTuple(headMcam)
+    robot.mTasks['gaze'].featureDes.xy.value = (0,0)
+    robot.mTasks['gaze'].gain.setConstant(1)
+
 
     # CoM Task
     robot.mTasks['com'] = MetaTaskKineCom(robot.dynamic)
@@ -149,7 +155,7 @@ def createTasks(robot):
     # Posture Task
     robot.mTasks['posture'] = MetaTaskKinePosture(robot.dynamic)
     robot.mTasks['posture'].ref = robot.halfSitting
-    robot.mTasks['posture'].gain.setConstant(5)   
+    robot.mTasks['posture'].gain.setConstant(1)   
     
 
 def createBalance(robot,solver):
@@ -158,7 +164,6 @@ def createBalance(robot,solver):
     # Task Limits
     robot.taskLim = TaskJointLimits('taskLim')
     setTaskLim(robot.taskLim,robot)
-    
 
     # --- push tasks --- #
     solver.sot.addContact(robot.contactLF)
